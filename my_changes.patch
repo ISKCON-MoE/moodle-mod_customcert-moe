@@ -1,0 +1,203 @@
+diff --git a/.gitignore b/.gitignore
+index cd82063..b8f749f 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,2 +1,4 @@
+ phpunit.xml
+ 
++.history/
++.DS_Store
+diff --git a/classes/certificate.php b/classes/certificate.php
+index 322d33e..f2abe73 100644
+--- a/classes/certificate.php
++++ b/classes/certificate.php
+@@ -346,7 +346,7 @@ class certificate {
+      * @param string $sort
+      * @return array the users
+      */
+-    public static function get_issues($customcertid, $groupmode, $cm, $limitfrom, $limitnum, $sort = '') {
++    public static function get_issues($customcertid, $groupmode, $cm, $limitfrom, $limitnum, $sort = '', $searchname = '') {
+         global $DB;
+ 
+         // Get the conditional SQL.
+@@ -364,15 +364,23 @@ class certificate {
+         // Add the conditional SQL and the customcertid to form all used parameters.
+         $allparams = $query->params + $conditionsparams + ['customcertid' => $customcertid];
+ 
++        $namesql = '';
++        if (!empty($searchname)) {
++            $namesql = " AND (LOWER(u.firstname) LIKE :searchfname OR LOWER(u.lastname) LIKE :searchlname)";
++            $allparams['searchfname'] = '%' . mb_strtolower($searchname) . '%';
++            $allparams['searchlname'] = '%' . mb_strtolower($searchname) . '%';
++        }
++
+         $orderby = $sort ?: $DB->sql_fullname();
+ 
+         $sql = "SELECT $query->selects, ci.id as issueid, ci.code, ci.timecreated
+-                  FROM {user} u
++                FROM {user} u
+             INNER JOIN {customcert_issues} ci ON (u.id = ci.userid)
+-                       $query->joins
+-                 WHERE u.deleted = 0 AND ci.customcertid = :customcertid
+-                       $conditionssql
+-              ORDER BY $orderby";
++                    $query->joins
++                WHERE u.deleted = 0 AND ci.customcertid = :customcertid
++                    $conditionssql
++                    $namesql
++            ORDER BY $orderby";
+ 
+         return $DB->get_records_sql($sql, $allparams, $limitfrom, $limitnum);
+     }
+@@ -385,7 +393,7 @@ class certificate {
+      * @param bool $groupmode the group mode
+      * @return int the number of issues
+      */
+-    public static function get_number_of_issues($customcertid, $cm, $groupmode) {
++    public static function get_number_of_issues($customcertid, $cm, $groupmode, $searchname = '') {
+         global $DB;
+ 
+         // Get the conditional SQL.
+@@ -399,14 +407,22 @@ class certificate {
+         // Add the conditional SQL and the customcertid to form all used parameters.
+         $allparams = $conditionsparams + ['customcertid' => $customcertid];
+ 
+-        // Return the number of issues.
++        $namesql = '';
++        if (!empty($searchname)) {
++            $namesql = " AND (LOWER(u.firstname) LIKE :searchfname OR LOWER(u.lastname) LIKE :searchlname)";
++            $allparams['searchfname'] = '%' . mb_strtolower($searchname) . '%';
++            $allparams['searchlname'] = '%' . mb_strtolower($searchname) . '%';
++        }
++
++        // Return the number of issues. 
+         $sql = "SELECT COUNT(u.id) as count
+                   FROM {user} u
+             INNER JOIN {customcert_issues} ci
+                     ON u.id = ci.userid
+                  WHERE u.deleted = 0
+                    AND ci.customcertid = :customcertid
+-                       $conditionssql";
++                       $conditionssql
++                       $namesql";
+         return $DB->count_records_sql($sql, $allparams);
+     }
+ 
+diff --git a/classes/report_table.php b/classes/report_table.php
+index 6405e3f..031255d 100644
+--- a/classes/report_table.php
++++ b/classes/report_table.php
+@@ -56,6 +56,11 @@ class report_table extends \table_sql {
+      */
+     protected $groupmode;
+ 
++    /**
++     * @var string $searchname The search string for filtering by name
++     */
++    protected $searchname;
++
+     /**
+      * Sets up the table.
+      *
+@@ -63,8 +68,9 @@ class report_table extends \table_sql {
+      * @param \stdClass $cm the course module
+      * @param bool $groupmode are we in group mode?
+      * @param string|null $download The file type, null if we are not downloading
++     * @param string $searchname The search string for filtering by name
+      */
+-    public function __construct($customcertid, $cm, $groupmode, $download = null) {
++    public function __construct($customcertid, $cm, $groupmode, $download = null, $searchname = '') {
+         parent::__construct('mod_customcert_report_table');
+ 
+         $context = \context_module::instance($cm->id);
+@@ -124,9 +130,10 @@ class report_table extends \table_sql {
+         $this->no_sorting('download');
+         $this->is_downloadable(true);
+ 
+-        $this->customcertid = $customcertid;
+-        $this->cm = $cm;
+-        $this->groupmode = $groupmode;
++    $this->customcertid = $customcertid;
++    $this->cm = $cm;
++    $this->groupmode = $groupmode;
++    $this->searchname = $searchname;
+     }
+ 
+     /**
+@@ -231,12 +238,12 @@ class report_table extends \table_sql {
+      * @param bool $useinitialsbar do you want to use the initials bar.
+      */
+     public function query_db($pagesize, $useinitialsbar = true) {
+-        $total = \mod_customcert\certificate::get_number_of_issues($this->customcertid, $this->cm, $this->groupmode);
++        $total = \mod_customcert\certificate::get_number_of_issues($this->customcertid, $this->cm, $this->groupmode, $this->searchname);
+ 
+         $this->pagesize($pagesize, $total);
+ 
+         $this->rawdata = \mod_customcert\certificate::get_issues($this->customcertid, $this->groupmode, $this->cm,
+-            $this->get_page_start(), $this->get_page_size(), $this->get_sql_sort());
++            $this->get_page_start(), $this->get_page_size(), $this->get_sql_sort(), $this->searchname);
+ 
+         // Set initial bars.
+         if ($useinitialsbar) {
+@@ -249,7 +256,7 @@ class report_table extends \table_sql {
+      */
+     public function download() {
+         \core\session\manager::write_close();
+-        $total = \mod_customcert\certificate::get_number_of_issues($this->customcertid, $this->cm, $this->groupmode);
++        $total = \mod_customcert\certificate::get_number_of_issues($this->customcertid, $this->cm, $this->groupmode, $this->searchname);
+         $this->out($total, false);
+         exit;
+     }
+diff --git a/lang/en/customcert.php b/lang/en/customcert.php
+index 29b5880..b868c29 100644
+--- a/lang/en/customcert.php
++++ b/lang/en/customcert.php
+@@ -190,7 +190,7 @@ $string['privacy:metadata:customcert_issues:timecreated'] = 'The time the certif
+ $string['privacy:metadata:customcert_issues:userid'] = 'The ID of the user who was issued the certificate';
+ $string['rearrangeelements'] = 'Reposition elements';
+ $string['rearrangeelementsheading'] = 'Drag and drop elements to change where they are positioned on the certificate.';
+-$string['receiveddate'] = 'Awarded on';
++$string['receiveddate'] = 'Awarded on Krishna';
+ $string['refpoint'] = 'Reference point location';
+ $string['refpoint_help'] = 'The reference point is the location of an element from which its x and y coordinates are determined. It is indicated by the \'+\' that appears in the centre or corners of the element.';
+ $string['replacetemplate'] = 'Replace';
+diff --git a/view.php b/view.php
+index 4149fb0..78449a4 100644
+--- a/view.php
++++ b/view.php
+@@ -124,9 +124,10 @@ $event->trigger();
+ if (!$downloadown && !$downloadissue) {
+     // Generate the table to the report if there are issues to display.
+     if ($canviewreport) {
+-        // Get the total number of issues.
+-        $reporttable = new \mod_customcert\report_table($customcert->id, $cm, $groupmode, $downloadtable);
+-        $reporttable->define_baseurl($pageurl);
++    // Get the total number of issues.
++    $searchname = optional_param('searchname', '', PARAM_TEXT);
++    $reporttable = new \mod_customcert\report_table($customcert->id, $cm, $groupmode, $downloadtable, $searchname);
++    $reporttable->define_baseurl($pageurl);
+ 
+         if ($reporttable->is_downloading()) {
+             $reporttable->download();
+@@ -154,7 +155,7 @@ if (!$downloadown && !$downloadissue) {
+         $downloadbutton = $OUTPUT->render($downloadbutton);
+     }
+ 
+-    $numissues = \mod_customcert\certificate::get_number_of_issues($customcert->id, $cm, $groupmode);
++    $numissues = \mod_customcert\certificate::get_number_of_issues($customcert->id, $cm, $groupmode, $searchname);
+ 
+     $downloadallbutton = '';
+     if ($canviewreport && $numissues > 0) {
+@@ -176,6 +177,12 @@ if (!$downloadown && !$downloadissue) {
+     echo $issuehtml;
+     echo $downloadbutton;
+     echo $downloadallbutton;
++    // Add search form after download all button.
++    echo '<form method="get" action="" style="margin: 1em 0;">';
++    echo '<input type="hidden" name="id" value="' . $cm->id . '">';
++    echo '<input type="text" name="searchname" placeholder="Search by name" value="' . (isset($searchname) ? s($searchname) : '') . '"> ';
++    echo '<button type="submit">Search</button>';
++    echo '</form>';
+     if (isset($reporttable)) {
+         echo $OUTPUT->heading(get_string('listofissues', 'customcert', $numissues), 3);
+         groups_print_activity_menu($cm, $pageurl);
