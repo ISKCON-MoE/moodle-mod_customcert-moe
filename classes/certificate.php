@@ -346,7 +346,7 @@ class certificate {
      * @param string $sort
      * @return array the users
      */
-    public static function get_issues($customcertid, $groupmode, $cm, $limitfrom, $limitnum, $sort = '', $searchname = '') {
+    public static function get_issues($customcertid, $groupmode, $cm, $limitfrom, $limitnum, $sort = '', $searchname = '', $fromdate = '', $todate = '') {
         global $DB;
 
         // Get the conditional SQL.
@@ -371,6 +371,16 @@ class certificate {
             $allparams['searchlname'] = '%' . mb_strtolower($searchname) . '%';
         }
 
+        $datesql = '';
+        if (!empty($fromdate)) {
+            $datesql .= ' AND ci.timecreated >= :fromdate';
+            $allparams['fromdate'] = strtotime($fromdate . ' 00:00:00');
+        }
+        if (!empty($todate)) {
+            $datesql .= ' AND ci.timecreated <= :todate';
+            $allparams['todate'] = strtotime($todate . ' 23:59:59');
+        }
+
         $orderby = $sort ?: $DB->sql_fullname();
 
         $sql = "SELECT $query->selects, ci.id as issueid, ci.code, ci.timecreated
@@ -380,6 +390,7 @@ class certificate {
                 WHERE u.deleted = 0 AND ci.customcertid = :customcertid
                     $conditionssql
                     $namesql
+                    $datesql
             ORDER BY $orderby";
 
         return $DB->get_records_sql($sql, $allparams, $limitfrom, $limitnum);
@@ -393,7 +404,7 @@ class certificate {
      * @param bool $groupmode the group mode
      * @return int the number of issues
      */
-    public static function get_number_of_issues($customcertid, $cm, $groupmode, $searchname = '') {
+    public static function get_number_of_issues($customcertid, $cm, $groupmode, $searchname = '', $fromdate = '', $todate = '') {
         global $DB;
 
         // Get the conditional SQL.
@@ -413,6 +424,15 @@ class certificate {
             $allparams['searchfname'] = '%' . mb_strtolower($searchname) . '%';
             $allparams['searchlname'] = '%' . mb_strtolower($searchname) . '%';
         }
+        $datesql = '';
+        if (!empty($fromdate)) {
+            $datesql .= ' AND ci.timecreated >= :fromdate';
+            $allparams['fromdate'] = strtotime($fromdate . ' 00:00:00');
+        }
+        if (!empty($todate)) {
+            $datesql .= ' AND ci.timecreated <= :todate';
+            $allparams['todate'] = strtotime($todate . ' 23:59:59');
+        }
 
         // Return the number of issues. 
         $sql = "SELECT COUNT(u.id) as count
@@ -422,7 +442,8 @@ class certificate {
                  WHERE u.deleted = 0
                    AND ci.customcertid = :customcertid
                        $conditionssql
-                       $namesql";
+                       $namesql
+                       $datesql";
         return $DB->count_records_sql($sql, $allparams);
     }
 

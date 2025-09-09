@@ -126,7 +126,10 @@ if (!$downloadown && !$downloadissue) {
     if ($canviewreport) {
     // Get the total number of issues.
     $searchname = optional_param('searchname', '', PARAM_TEXT);
-    $reporttable = new \mod_customcert\report_table($customcert->id, $cm, $groupmode, $downloadtable, $searchname);
+    $fromdate = optional_param('fromdate', '', PARAM_RAW);
+    $todate = optional_param('todate', '', PARAM_RAW);
+    $reporttable = new \mod_customcert\report_table($customcert->id, $cm, $groupmode, $downloadtable, $searchname, $fromdate, $todate);
+    // If you want to use fromdate/todate in the report table, pass them here or filter after fetching records.
     $reporttable->define_baseurl($pageurl);
 
         if ($reporttable->is_downloading()) {
@@ -155,7 +158,7 @@ if (!$downloadown && !$downloadissue) {
         $downloadbutton = $OUTPUT->render($downloadbutton);
     }
 
-    $numissues = \mod_customcert\certificate::get_number_of_issues($customcert->id, $cm, $groupmode, $searchname);
+    $numissues = \mod_customcert\certificate::get_number_of_issues($customcert->id, $cm, $groupmode, $searchname, $fromdate, $todate);
 
     $downloadallbutton = '';
     if ($canviewreport && $numissues > 0) {
@@ -178,11 +181,7 @@ if (!$downloadown && !$downloadissue) {
     echo $downloadbutton;
     echo $downloadallbutton;
     // Add search form after download all button.
-    echo '<form method="get" action="" style="margin: 1em 0;">';
-    echo '<input type="hidden" name="id" value="' . $cm->id . '">';
-    echo '<input type="text" name="searchname" placeholder="Search by name" value="' . (isset($searchname) ? s($searchname) : '') . '"> ';
-    echo '<button type="submit">Search</button>';
-    echo '</form>';
+    echo customcert_search_form($cm->id, $searchname, $fromdate, $todate);
     if (isset($reporttable)) {
         echo $OUTPUT->heading(get_string('listofissues', 'customcert', $numissues), 3);
         groups_print_activity_menu($cm, $pageurl);
@@ -217,4 +216,30 @@ if (!$downloadown && !$downloadissue) {
     $template = new \mod_customcert\template($template);
     $template->generate_pdf(false, $userid);
     exit();
+}
+
+/**
+ * Outputs the search form for the customcert report.
+ *
+ * @param int $cmid The course module id.
+ * @param string $searchname The current search value.
+ * @param string $fromdate The from date value (Y-m-d).
+ * @param string $todate The to date value (Y-m-d).
+ * @return string The HTML for the search form.
+ */
+function customcert_search_form($cmid, $searchname, $fromdate = '', $todate = '') {
+    // Use s() if available, otherwise fallback to htmlspecialchars.
+    if (function_exists('s')) {
+        $safevalue = s($searchname);
+    } else {
+        $safevalue = htmlspecialchars($searchname, ENT_QUOTES, 'UTF-8');
+    }
+    $html = '<form method="get" action="" style="margin: 1em 0;">';
+    $html .= '<input type="hidden" name="id" value="' . $cmid . '">';
+    $html .= '<input type="text" name="searchname" placeholder="Search by name" value="' . $safevalue . '"> ';
+    $html .= '<input type="date" name="fromdate" value="' . $fromdate . '" placeholder="From date"> ';
+    $html .= '<input type="date" name="todate" value="' . $todate . '" placeholder="To date"> ';
+    $html .= '<button type="submit">Search</button>';
+    $html .= '</form>';
+    return $html;
 }

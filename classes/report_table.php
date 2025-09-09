@@ -62,6 +62,16 @@ class report_table extends \table_sql {
     protected $searchname;
 
     /**
+     * @var string $fromdate The from date filter
+     */
+    protected $fromdate;
+
+    /**
+     * @var string $todate The to date filter
+     */
+    protected $todate;
+
+    /**
      * Sets up the table.
      *
      * @param int $customcertid
@@ -70,7 +80,7 @@ class report_table extends \table_sql {
      * @param string|null $download The file type, null if we are not downloading
      * @param string $searchname The search string for filtering by name
      */
-    public function __construct($customcertid, $cm, $groupmode, $download = null, $searchname = '') {
+    public function __construct($customcertid, $cm, $groupmode, $download = null, $searchname = '', $fromdate = '', $todate = '') {
         parent::__construct('mod_customcert_report_table');
 
         $context = \context_module::instance($cm->id);
@@ -134,6 +144,8 @@ class report_table extends \table_sql {
     $this->cm = $cm;
     $this->groupmode = $groupmode;
     $this->searchname = $searchname;
+    $this->fromdate = $fromdate;
+    $this->todate = $todate;
     }
 
     /**
@@ -238,12 +250,12 @@ class report_table extends \table_sql {
      * @param bool $useinitialsbar do you want to use the initials bar.
      */
     public function query_db($pagesize, $useinitialsbar = true) {
-        $total = \mod_customcert\certificate::get_number_of_issues($this->customcertid, $this->cm, $this->groupmode, $this->searchname);
+        $total = \mod_customcert\certificate::get_number_of_issues($this->customcertid, $this->cm, $this->groupmode, $this->searchname, $this->fromdate, $this->todate);
 
         $this->pagesize($pagesize, $total);
 
         $this->rawdata = \mod_customcert\certificate::get_issues($this->customcertid, $this->groupmode, $this->cm,
-            $this->get_page_start(), $this->get_page_size(), $this->get_sql_sort(), $this->searchname);
+            $this->get_page_start(), $this->get_page_size(), $this->get_sql_sort(), $this->searchname, $this->fromdate, $this->todate);
 
         // Set initial bars.
         if ($useinitialsbar) {
