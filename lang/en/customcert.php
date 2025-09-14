@@ -72,6 +72,7 @@ $string['deliveryoptioninline'] = 'Send the file inline to the browser';
 $string['deliveryoptions'] = 'Delivery options';
 $string['description'] = 'Description';
 $string['downloadallissuedcertificates'] = 'Download all issued certificates';
+$string['downloadallfilteredcertificates'] = 'Download all filtered certificates';
 $string['downloadallsitecertificates'] = 'Download all site certificates';
 $string['downloadallsitecertificatesdesc'] = 'This will download all the certificates on the site in a zip file.';
 $string['duplicate'] = 'Duplicate';

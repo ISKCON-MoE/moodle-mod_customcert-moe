@@ -27,6 +27,7 @@ require_once('../../config.php');
 $id = required_param('id', PARAM_INT);
 $downloadown = optional_param('downloadown', false, PARAM_BOOL);
 $downloadall = optional_param('downloadall', 0, PARAM_INT);
+$downloadallfiltered = optional_param('downloadallfiltered', 0, PARAM_INT);
 $downloadtable = optional_param('download', null, PARAM_ALPHA);
 $downloadissue = optional_param('downloadissue', 0, PARAM_INT);
 $deleteissue = optional_param('deleteissue', 0, PARAM_INT);
@@ -47,6 +48,10 @@ require_capability('mod/customcert:view', $context);
 $canreceive = has_capability('mod/customcert:receiveissue', $context);
 $canmanage = has_capability('mod/customcert:manage', $context);
 $canviewreport = has_capability('mod/customcert:viewreport', $context);
+
+$searchname = optional_param('searchname', '', PARAM_TEXT);
+$fromdate = optional_param('fromdate', '', PARAM_RAW);
+$todate = optional_param('todate', '', PARAM_RAW);
 
 // Initialise $PAGE.
 $pageurl = new moodle_url('/mod/customcert/view.php', ['id' => $cm->id]);
@@ -112,6 +117,20 @@ if ($downloadall && $canviewreport && confirm_sesskey()) {
     exit();
 }
 
+// Check if we are downloading all certificates.
+if ($downloadallfiltered && $canviewreport && confirm_sesskey()) {
+    $template = new \mod_customcert\template($template);
+    $issues = \mod_customcert\certificate::get_issues($customcert->id, $groupmode, $cm, 0, 0, '', $searchname, $fromdate, $todate);
+    
+    // The button is not visible if there are no issues, so in this case just redirect back to this page.
+    if (empty($issues)) {
+        redirect(new moodle_url('/mod/customcert/view.php', ['id' => $id]));
+    }
+
+    \mod_customcert\certificate::download_all_issues_for_instance($template, $issues);
+    exit();
+}
+
 $event = \mod_customcert\event\course_module_viewed::create([
     'objectid' => $customcert->id,
     'context' => $context,
@@ -125,9 +144,6 @@ if (!$downloadown && !$downloadissue) {
     // Generate the table to the report if there are issues to display.
     if ($canviewreport) {
     // Get the total number of issues.
-    $searchname = optional_param('searchname', '', PARAM_TEXT);
-    $fromdate = optional_param('fromdate', '', PARAM_RAW);
-    $todate = optional_param('todate', '', PARAM_RAW);
     $reporttable = new \mod_customcert\report_table($customcert->id, $cm, $groupmode, $downloadtable, $searchname, $fromdate, $todate);
     // If you want to use fromdate/todate in the report table, pass them here or filter after fetching records.
     $reporttable->define_baseurl($pageurl);
@@ -175,11 +191,38 @@ if (!$downloadown && !$downloadissue) {
         $downloadallbutton = $OUTPUT->render($downloadallbutton);
     }
 
+    $downloadallfilteredbutton = '';
+    if ($canviewreport && $numissues > 0) {
+        $linkname = get_string('downloadallfilteredcertificates', 'customcert');
+
+        $template = new \mod_customcert\template($template);
+        $issues = \mod_customcert\certificate::get_issues($customcert->id, $groupmode, $cm, 0, 0, '', $searchname, $fromdate, $todate);
+ 
+        // Generate a link that will trigger download of filtered issues.
+        $link = new moodle_url('/mod/customcert/view.php', [
+            'id' => $cm->id,
+            'downloadallfiltered' => true,
+            'sesskey' => sesskey(),
+            'searchname' => $searchname,
+            'fromdate' => $fromdate,
+            'todate' => $todate,
+        ]);
+
+        $downloadallfilteredbutton = new single_button($link, $linkname, 'get', single_button::BUTTON_INFO);
+        $downloadallfilteredbutton->class .= ' m-b-1';  // Seems a bit hackish, ahem.
+        $downloadallfilteredbutton = $OUTPUT->render($downloadallfilteredbutton);
+    }
+
     // Output all the page data.
     echo $OUTPUT->header();
     echo $issuehtml;
     echo $downloadbutton;
     echo $downloadallbutton;
+
+    if (($searchname || $fromdate || $todate) && $downloadallfilteredbutton) {
+        echo $downloadallfilteredbutton;
+    }
+
     // Add search form after download all button.
     echo customcert_search_form($cm->id, $searchname, $fromdate, $todate);
     if (isset($reporttable)) {

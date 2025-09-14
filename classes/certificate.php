@@ -364,12 +364,7 @@ class certificate {
         // Add the conditional SQL and the customcertid to form all used parameters.
         $allparams = $query->params + $conditionsparams + ['customcertid' => $customcertid];
 
-        $namesql = '';
-        if (!empty($searchname)) {
-            $namesql = " AND (LOWER(u.firstname) LIKE :searchfname OR LOWER(u.lastname) LIKE :searchlname)";
-            $allparams['searchfname'] = '%' . mb_strtolower($searchname) . '%';
-            $allparams['searchlname'] = '%' . mb_strtolower($searchname) . '%';
-        }
+        $namesql = self::build_name_search_sql($searchname, $allparams);
 
         $datesql = '';
         if (!empty($fromdate)) {
@@ -418,12 +413,7 @@ class certificate {
         // Add the conditional SQL and the customcertid to form all used parameters.
         $allparams = $conditionsparams + ['customcertid' => $customcertid];
 
-        $namesql = '';
-        if (!empty($searchname)) {
-            $namesql = " AND (LOWER(u.firstname) LIKE :searchfname OR LOWER(u.lastname) LIKE :searchlname)";
-            $allparams['searchfname'] = '%' . mb_strtolower($searchname) . '%';
-            $allparams['searchlname'] = '%' . mb_strtolower($searchname) . '%';
-        }
+        $namesql = self::build_name_search_sql($searchname, $allparams);
         $datesql = '';
         if (!empty($fromdate)) {
             $datesql .= ' AND ci.timecreated >= :fromdate';
@@ -594,5 +584,31 @@ class certificate {
         }
 
         return $code;
+    }
+
+    /**
+     * Helper to build SQL and params for searching by name words.
+     *
+     * @param string $searchname
+     * @param array &$allparams
+     * @return string SQL fragment for name search
+     */
+    private static function build_name_search_sql($searchname, array &$allparams) {
+        $namesql = '';
+        if (!empty($searchname)) {
+            $searchwords = preg_split('/\s+/', trim($searchname));
+            $nameconds = [];
+            foreach ($searchwords as $idx => $word) {
+                $paramfname = 'searchfname' . $idx;
+                $paramlname = 'searchlname' . $idx;
+                $nameconds[] = "(LOWER(u.firstname) LIKE :$paramfname OR LOWER(u.lastname) LIKE :$paramlname)";
+                $allparams[$paramfname] = '%' . mb_strtolower($word) . '%';
+                $allparams[$paramlname] = '%' . mb_strtolower($word) . '%';
+            }
+            if ($nameconds) {
+                $namesql = ' AND (' . implode(' OR ', $nameconds) . ')';
+            }
+        }
+        return $namesql;
     }
 }
